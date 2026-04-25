@@ -180,5 +180,58 @@
   <div id="toast" class="toast" hidden></div>
 
   <script src="app.js"></script>
+  <input type="file" id="filePicker" accept="image/*" style="display:none;" />
+<button id="uploadBtn">Clock In (Upload Photo)</button>
+<p id="status"></p>
+
+<script type="module">
+  // 1. Import the specific SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+  import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-storage.js";
+
+  // 2. Your specific config (from your screenshot)
+  const firebaseConfig = {
+    apiKey: "AIzaSyChC5T5_N27IE4uAkv1MBn7_i35fc-oMzk",
+    authDomain: "elevare-clocking-in-system.firebaseapp.com",
+    projectId: "elevare-clocking-in-system",
+    storageBucket: "elevare-clocking-in-system.firebasestorage.app",
+    messagingSenderId: "901215275749",
+    appId: "1:901215275749:web:04c3032327e108346f220c"
+  };
+
+  // 3. Initialize Firebase and Storage
+  const app = initializeApp(firebaseConfig);
+  const storage = getStorage(app);
+
+  // 4. Logic to handle the upload
+  const filePicker = document.getElementById('filePicker');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const statusTxt = document.getElementById('status');
+
+  // Open file picker when button is clicked
+  uploadBtn.addEventListener('click', () => filePicker.click());
+
+  // Handle file selection
+  filePicker.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    statusTxt.innerText = "Uploading...";
+
+    // Create a unique filename based on time
+    const storageRef = ref(storage, 'clock-ins/' + Date.now() + '-' + file.name);
+
+    try {
+      const snapshot = await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(snapshot.ref);
+      statusTxt.innerText = "Success! Clock-in logged.";
+      console.log("File URL:", url);
+    } catch (error) {
+      console.error(error);
+      statusTxt.innerText = "Error: Check your Firebase Storage Rules!";
+    }
+  });
+</script>
+  
 </body>
 </html>
