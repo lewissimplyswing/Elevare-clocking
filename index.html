@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#0f1117" />
+  <meta name="description" content="TimeClockPro – track hours, send invoices" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>TimeClockPro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="noise"></div>
+
+  <header>
+    <div class="logo">
+      <span class="logo-mark">⏱</span>
+      <span class="logo-text">TimeClockPro</span>
+    </div>
+    <nav>
+      <button class="nav-btn active" data-view="log">Log</button>
+      <button class="nav-btn" data-view="history">History</button>
+      <button class="nav-btn" data-view="invoice">Invoice</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- LOG VIEW -->
+    <section id="view-log" class="view active">
+      <div class="section-header">
+        <h1>New Entry</h1>
+        <p class="subtitle">Record your time & notes</p>
+      </div>
+
+      <form id="entry-form" class="entry-form" novalidate>
+        <div class="form-row">
+          <div class="field">
+            <label for="entry-date">Date</label>
+            <input type="date" id="entry-date" required />
+          </div>
+        </div>
+
+        <div class="form-row two-col">
+          <div class="field">
+            <label for="clock-in">Clock In</label>
+            <input type="time" id="clock-in" required />
+          </div>
+          <div class="field">
+            <label for="clock-out">Clock Out</label>
+            <input type="time" id="clock-out" required />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="notes">Notes <span class="label-hint">What was charged in these hours?</span></label>
+          <textarea id="notes" rows="4" placeholder="e.g. Designed homepage layout, fixed nav bug, client call…"></textarea>
+        </div>
+
+        <div class="duration-preview" id="duration-preview" hidden>
+          <span class="dp-label">Duration</span>
+          <span class="dp-value" id="dp-value">—</span>
+          <span class="dp-rate" id="dp-rate">—</span>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Save Entry</button>
+          <button type="button" class="btn-ghost" id="clear-btn">Clear</button>
+        </div>
+      </form>
+
+      <div class="month-summary" id="month-summary"></div>
+    </section>
+
+    <!-- HISTORY VIEW -->
+    <section id="view-history" class="view">
+      <div class="section-header">
+        <h1>History</h1>
+        <div class="filter-row">
+          <select id="filter-month"></select>
+          <button class="btn-ghost btn-sm" id="delete-all-btn">Clear month</button>
+        </div>
+      </div>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+    <!-- INVOICE VIEW -->
+    <section id="view-invoice" class="view">
+      <div class="section-header">
+        <h1>Invoice</h1>
+        <p class="subtitle">Generate & send monthly invoice</p>
+      </div>
+
+      <div class="invoice-config">
+        <div class="form-row two-col">
+          <div class="field">
+            <label for="inv-month">Month</label>
+            <select id="inv-month"></select>
+          </div>
+          <div class="field">
+            <label for="inv-rate">Rate (£/hr)</label>
+            <input type="number" id="inv-rate" value="15" min="1" step="0.5" />
+          </div>
+        </div>
+
+        <div class="form-row two-col">
+          <div class="field">
+            <label for="inv-your-name">Your Name</label>
+            <input type="text" id="inv-your-name" placeholder="Jane Smith" />
+          </div>
+          <div class="field">
+            <label for="inv-invoice-no">Invoice No.</label>
+            <input type="text" id="inv-invoice-no" placeholder="INV-001" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="inv-client">Client Name / Company</label>
+          <input type="text" id="inv-client" placeholder="Acme Ltd" />
+        </div>
+
+        <div class="field">
+          <label for="inv-client-addr">Client Address</label>
+          <textarea id="inv-client-addr" rows="3" placeholder="123 High Street&#10;London&#10;EC1A 1BB"></textarea>
+        </div>
+
+        <div class="field">
+          <label for="inv-payment">Payment Details</label>
+          <textarea id="inv-payment" rows="2" placeholder="Sort code: 00-00-00  Account: 12345678"></textarea>
+        </div>
+
+        <div class="invoice-actions">
+          <button class="btn-primary" id="preview-invoice-btn">Preview Invoice</button>
+          <button class="btn-secondary" id="print-invoice-btn">Print / Save PDF</button>
+          <button class="btn-ghost" id="email-invoice-btn">Open in Email</button>
+        </div>
+      </div>
+
+      <div id="invoice-preview" class="invoice-preview" hidden></div>
+    </section>
+  </main>
+
+  <!-- EDIT MODAL -->
+  <div id="edit-modal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Edit Entry</h2>
+        <button class="modal-close" id="modal-close">✕</button>
+      </div>
+      <form id="edit-form" novalidate>
+        <div class="field">
+          <label for="edit-date">Date</label>
+          <input type="date" id="edit-date" required />
+        </div>
+        <div class="form-row two-col">
+          <div class="field">
+            <label for="edit-in">Clock In</label>
+            <input type="time" id="edit-in" required />
+          </div>
+          <div class="field">
+            <label for="edit-out">Clock Out</label>
+            <input type="time" id="edit-out" required />
+          </div>
+        </div>
+        <div class="field">
+          <label for="edit-notes">Notes</label>
+          <textarea id="edit-notes" rows="4"></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Update</button>
+          <button type="button" class="btn-danger" id="delete-entry-btn">Delete</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
