@@ -1,12 +1,13 @@
 /* ─── TimeClockPro · sw.js ────────────────────────────────────────────────── */
 const CACHE_NAME = 'tcp-v1';
 const ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;600;700;800&display=swap'
+  '/Elevare-clocking/',
+  '/Elevare-clocking/index.html',
+  '/Elevare-clocking/style.css',
+  '/Elevare-clocking/app.js',
+  '/Elevare-clocking/manifest.json',
+  '/Elevare-clocking/icon-192.png',
+  '/Elevare-clocking/icon-512.png',
 ];
 
 self.addEventListener('install', event => {
@@ -34,7 +35,7 @@ self.addEventListener('fetch', event => {
         const clone = resp.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return resp;
-      }).catch(() => caches.match('/index.html'));
+}).catch(() => caches.match('/Elevare-clocking/index.html'));
     })
   );
 });
