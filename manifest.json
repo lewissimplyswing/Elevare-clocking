@@ -2,7 +2,7 @@
   "name": "TimeClockPro",
   "short_name": "TimeClock",
   "description": "Track time, log notes, send invoices",
-  "start_url": "/",
+  "start_url": "/Elevare-clocking/",
   "display": "standalone",
   "background_color": "#0f1117",
   "theme_color": "#0f1117",
