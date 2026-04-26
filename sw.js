@@ -1,5 +1,5 @@
-/* ─── TimeClockPro · sw.js ────────────────────────────────────────────────── */
-const CACHE_NAME = 'tcp-v1';
+/* ─── Elevare Clocking · sw.js ────────────────────────────────────────────── */
+const CACHE_NAME = 'elevare-v2';
 const ASSETS = [
   '/Elevare-clocking/',
   '/Elevare-clocking/index.html',
@@ -27,6 +27,12 @@ self.addEventListener('activate', event => {
 });
 
 self.addEventListener('fetch', event => {
+  // Don't cache Firebase API calls
+  if (event.request.url.includes('firestore') ||
+      event.request.url.includes('googleapis') ||
+      event.request.url.includes('gstatic.com/firebasejs')) {
+    return;
+  }
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -35,7 +41,7 @@ self.addEventListener('fetch', event => {
         const clone = resp.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return resp;
-}).catch(() => caches.match('/Elevare-clocking/index.html'));
+      }).catch(() => caches.match('/Elevare-clocking/index.html'));
     })
   );
 });
