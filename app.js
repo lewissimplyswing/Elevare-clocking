@@ -1,9 +1,8 @@
-/* ─── Elevare Clocking · app.js (Firebase Edition) ───────────────────────── */
+/* ─── Elevare Clocking · app.js ───────────────────────────────────────────── */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
-import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, onSnapshot, getDocs }
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, getDocs, query, where }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ── Firebase Init ──────────────────────────────────────────────────────── */
@@ -16,84 +15,70 @@ const firebaseConfig = {
   appId: "1:901215275749:web:04c3032327e108346f220c"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
-const auth        = getAuth(firebaseApp);
-const db          = getFirestore(firebaseApp);
+const app  = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
 
 /* ── State ──────────────────────────────────────────────────────────────── */
-let currentUser  = null;
-let allEntries   = [];
-let unsubscribe  = null;
+let currentUser = null;
+let allEntries  = [];
 
-/* Handle redirect result on page load */
-getRedirectResult(auth).then(result => {
-  // handled by onAuthStateChanged
-}).catch(() => {});
+/* ── Toast ──────────────────────────────────────────────────────────────── */
+let toastTimer;
+function showToast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (type ? ` ${type}` : '');
+  t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
+}
 
 /* ── Auth ───────────────────────────────────────────────────────────────── */
-document.getElementById('google-signin-btn').addEventListener('click', async () => {
-  const provider = new GoogleAuthProvider();
-  try {
-    // Try popup first (works on desktop and most mobile browsers)
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
-      // Fall back to redirect if popup is blocked
-      try {
-        try {
-      await signInWithPopup(auth, provider);
-    } catch(popupErr) {
-      await signInWithRedirect(auth, provider);
-    }
-      } catch (e2) {
-        showToast('Sign in failed. Please try again.', 'error');
-      }
-    } else {
-      showToast('Sign in failed. Please try again.', 'error');
-    }
+// Handle redirect result
+getRedirectResult(auth).then(result => {
+  if (result && result.user) {
+    console.log('Redirect sign-in successful');
   }
+}).catch(err => {
+  console.error('Redirect error:', err);
 });
 
-document.getElementById('signout-btn').addEventListener('click', async () => {
-  if (unsubscribe) unsubscribe();
-  await signOut(auth);
+document.getElementById('google-signin-btn').addEventListener('click', () => {
+  const provider = new GoogleAuthProvider();
+  signInWithRedirect(auth, provider);
 });
 
-onAuthStateChanged(auth, user => {
-  currentUser = user;
+document.getElementById('signout-btn').addEventListener('click', () => {
+  signOut(auth);
+});
+
+onAuthStateChanged(auth, async user => {
   if (user) {
+    currentUser = user;
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').hidden = false;
-    startListening();
-    dateInput.value = todayStr();
+    await loadEntries();
     renderMonthlySummary();
+    document.getElementById('entry-date').value = todayStr();
   } else {
+    currentUser = null;
+    allEntries = [];
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app').hidden = true;
-    allEntries = [];
-    if (unsubscribe) unsubscribe();
   }
 });
 
-/* ── Firestore Listener ─────────────────────────────────────────────────── */
-function startListening() {
-  if (unsubscribe) unsubscribe();
-  const q = query(
-    collection(db, 'entries'),
-    where('uid', '==', currentUser.uid),
-    
-  );
-  unsubscribe = onSnapshot(q, snapshot => {
+/* ── Firestore ──────────────────────────────────────────────────────────── */
+async function loadEntries() {
+  try {
+    const q = query(collection(db, 'entries'), where('uid', '==', currentUser.uid));
+    const snapshot = await getDocs(q);
     allEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderMonthlySummary();
-    // Refresh whichever view is active
-    const activeView = document.querySelector('.nav-btn.active')?.dataset.view;
-    if (activeView === 'history') renderHistory();
-    if (activeView === 'invoice') populateInvoiceMonths();
-  }, err => {
-    console.error(err);
+  } catch (err) {
+    console.error('Load error:', err);
     showToast('Error loading data', 'error');
-  });
+  }
 }
 
 /* ── Time Helpers ───────────────────────────────────────────────────────── */
@@ -109,8 +94,7 @@ function calcHours(dateStr, inTime, outTime) {
 function formatHours(h) {
   const hrs  = Math.floor(h);
   const mins = Math.round((h - hrs) * 60);
-  if (mins === 0) return `${hrs}h`;
-  return `${hrs}h ${mins}m`;
+  return mins === 0 ? `${hrs}h` : `${hrs}h ${mins}m`;
 }
 
 function formatDate(dateStr) {
@@ -124,6 +108,9 @@ function monthLabel(key) {
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
 function todayStr() { return new Date().toISOString().slice(0, 10); }
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 /* ── Navigation ─────────────────────────────────────────────────────────── */
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -136,17 +123,6 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
     if (btn.dataset.view === 'invoice') populateInvoiceMonths();
   });
 });
-
-/* ── Toast ──────────────────────────────────────────────────────────────── */
-let toastTimer;
-function showToast(msg, type = '') {
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast' + (type ? ` ${type}` : '');
-  t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
-}
 
 /* ── Log View ───────────────────────────────────────────────────────────── */
 const dateInput  = document.getElementById('entry-date');
@@ -176,9 +152,9 @@ function updatePreview() {
 document.getElementById('entry-form').addEventListener('submit', async e => {
   e.preventDefault();
   if (!currentUser) return;
-  const date = dateInput.value;
-  const tin  = inInput.value;
-  const tout = outInput.value;
+  const date  = dateInput.value;
+  const tin   = inInput.value;
+  const tout  = outInput.value;
   if (!date || !tin || !tout) return showToast('Please fill date, in & out times', 'error');
   const h = calcHours(date, tin, tout);
   if (h <= 0 || h >= 24) return showToast('Clock-out must be after clock-in', 'error');
@@ -188,19 +164,20 @@ document.getElementById('entry-form').addEventListener('submit', async e => {
   saveBtn.disabled = true;
 
   try {
-    await addDoc(collection(db, 'entries'), {
+    const docRef = await addDoc(collection(db, 'entries'), {
       uid: currentUser.uid,
-      date,
-      in: tin,
-      out: tout,
+      date, in: tin, out: tout,
       notes: notesInput.value.trim(),
       createdAt: Date.now()
     });
+    allEntries.push({ id: docRef.id, uid: currentUser.uid, date, in: tin, out: tout, notes: notesInput.value.trim() });
     showToast('Entry saved ✓', 'success');
     document.getElementById('entry-form').reset();
     dateInput.value = todayStr();
     dpPreview.hidden = true;
+    renderMonthlySummary();
   } catch (err) {
+    console.error(err);
     showToast('Failed to save. Check connection.', 'error');
   } finally {
     saveBtn.textContent = 'Save Entry';
@@ -222,24 +199,14 @@ function renderMonthlySummary() {
   const el = document.getElementById('month-summary');
   if (!monthEntries.length) { el.innerHTML = ''; return; }
   el.innerHTML = `
-    <div class="summary-card">
-      <div class="sc-label">This month</div>
-      <div class="sc-value">${monthEntries.length} entries</div>
-    </div>
-    <div class="summary-card">
-      <div class="sc-label">Total hours</div>
-      <div class="sc-value accent">${formatHours(totalH)}</div>
-    </div>
-    <div class="summary-card">
-      <div class="sc-label">Earnings</div>
-      <div class="sc-value">£${(totalH * rate).toFixed(2)}</div>
-    </div>`;
+    <div class="summary-card"><div class="sc-label">This month</div><div class="sc-value">${monthEntries.length} entries</div></div>
+    <div class="summary-card"><div class="sc-label">Total hours</div><div class="sc-value accent">${formatHours(totalH)}</div></div>
+    <div class="summary-card"><div class="sc-label">Earnings</div><div class="sc-value">£${(totalH * rate).toFixed(2)}</div></div>`;
 }
 
-/* ── History View ───────────────────────────────────────────────────────── */
+/* ── History ────────────────────────────────────────────────────────────── */
 function getMonths() {
-  const keys = [...new Set(allEntries.map(e => monthKey(e.date)))].sort().reverse();
-  return keys;
+  return [...new Set(allEntries.map(e => monthKey(e.date)))].sort().reverse();
 }
 
 function populateFilterMonths() {
@@ -256,33 +223,28 @@ function renderHistory() {
   populateFilterMonths();
   const month = document.getElementById('filter-month').value;
   const rate  = parseFloat(document.getElementById('inv-rate').value) || 15;
-  const entries = allEntries
-    .filter(e => monthKey(e.date) === month)
+  const entries = allEntries.filter(e => monthKey(e.date) === month)
     .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in));
   const list = document.getElementById('history-list');
-
   if (!entries.length) {
     list.innerHTML = '<div class="empty-state"><span class="es-icon">📋</span>No entries for this month yet.</div>';
     return;
   }
-
   list.innerHTML = entries.map(e => {
     const h = calcHours(e.date, e.in, e.out);
-    return `
-      <div class="history-entry" data-id="${e.id}">
-        <div>
-          <div class="he-date">${formatDate(e.date)}</div>
-          <div class="he-times">${e.in} → ${e.out}</div>
-          ${e.notes ? `<div class="he-notes">${escHtml(e.notes)}</div>` : ''}
-        </div>
-        <div>
-          <div class="he-duration">${formatHours(h)}</div>
-          <div class="he-amount">£${(h * rate).toFixed(2)}</div>
-          <div class="he-edit-hint">tap to edit</div>
-        </div>
-      </div>`;
+    return `<div class="history-entry" data-id="${e.id}">
+      <div>
+        <div class="he-date">${formatDate(e.date)}</div>
+        <div class="he-times">${e.in} → ${e.out}</div>
+        ${e.notes ? `<div class="he-notes">${escHtml(e.notes)}</div>` : ''}
+      </div>
+      <div>
+        <div class="he-duration">${formatHours(h)}</div>
+        <div class="he-amount">£${(h * rate).toFixed(2)}</div>
+        <div class="he-edit-hint">tap to edit</div>
+      </div>
+    </div>`;
   }).join('');
-
   list.querySelectorAll('.history-entry').forEach(el => {
     el.addEventListener('click', () => openEditModal(el.dataset.id));
   });
@@ -294,14 +256,14 @@ document.getElementById('delete-all-btn').addEventListener('click', async () => 
   const month = document.getElementById('filter-month').value;
   if (!month || !currentUser) return;
   if (!confirm(`Delete ALL entries for ${monthLabel(month)}?`)) return;
-
   const toDelete = allEntries.filter(e => monthKey(e.date) === month);
   try {
     await Promise.all(toDelete.map(e => deleteDoc(doc(db, 'entries', e.id))));
+    allEntries = allEntries.filter(e => monthKey(e.date) !== month);
+    renderHistory();
+    renderMonthlySummary();
     showToast('Month cleared', 'success');
-  } catch {
-    showToast('Error deleting entries', 'error');
-  }
+  } catch { showToast('Error deleting entries', 'error'); }
 });
 
 /* ── Edit Modal ─────────────────────────────────────────────────────────── */
@@ -337,28 +299,30 @@ document.getElementById('edit-form').addEventListener('submit', async e => {
   if (!date || !tin || !tout) return showToast('Fill all required fields', 'error');
   const h = calcHours(date, tin, tout);
   if (h <= 0 || h >= 24) return showToast('Clock-out must be after clock-in', 'error');
-
   try {
     await updateDoc(doc(db, 'entries', editingId), { date, in: tin, out: tout, notes });
+    const idx = allEntries.findIndex(e => e.id === editingId);
+    if (idx !== -1) allEntries[idx] = { ...allEntries[idx], date, in: tin, out: tout, notes };
     closeEditModal();
+    renderHistory();
+    renderMonthlySummary();
     showToast('Entry updated ✓', 'success');
-  } catch {
-    showToast('Failed to update', 'error');
-  }
+  } catch { showToast('Failed to update', 'error'); }
 });
 
 document.getElementById('delete-entry-btn').addEventListener('click', async () => {
   if (!confirm('Delete this entry?')) return;
   try {
     await deleteDoc(doc(db, 'entries', editingId));
+    allEntries = allEntries.filter(e => e.id !== editingId);
     closeEditModal();
+    renderHistory();
+    renderMonthlySummary();
     showToast('Entry deleted', 'success');
-  } catch {
-    showToast('Failed to delete', 'error');
-  }
+  } catch { showToast('Failed to delete', 'error'); }
 });
 
-/* ── Invoice View ───────────────────────────────────────────────────────── */
+/* ── Invoice ────────────────────────────────────────────────────────────── */
 function populateInvoiceMonths() {
   const months = getMonths();
   const sel = document.getElementById('inv-month');
@@ -368,7 +332,7 @@ function populateInvoiceMonths() {
   const invNo = document.getElementById('inv-invoice-no');
   if (!invNo.value) {
     const d = new Date();
-    invNo.value = `INV-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}-001`;
+    invNo.value = `INV-${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}-001`;
   }
 }
 
@@ -381,69 +345,32 @@ function buildInvoiceHTML() {
   const cAddr   = document.getElementById('inv-client-addr').value.trim().replace(/\n/g, '<br>');
   const payment = document.getElementById('inv-payment').value.trim().replace(/\n/g, '<br>');
   const today   = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-
-  const entries = allEntries
-    .filter(e => monthKey(e.date) === month)
+  const entries = allEntries.filter(e => monthKey(e.date) === month)
     .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in));
-
   if (!entries.length) return null;
-
   const totalH   = entries.reduce((s, e) => s + calcHours(e.date, e.in, e.out), 0);
   const subtotal = totalH * rate;
-
   const rows = entries.map(e => {
     const h = calcHours(e.date, e.in, e.out);
-    return `<tr>
-      <td>${formatDate(e.date)}</td>
-      <td>${e.in} – ${e.out}</td>
-      <td>${formatHours(h)}</td>
-      <td>${escHtml(e.notes || '—')}</td>
-      <td style="text-align:right">£${(h * rate).toFixed(2)}</td>
-    </tr>`;
+    return `<tr><td>${formatDate(e.date)}</td><td>${e.in}–${e.out}</td><td>${formatHours(h)}</td><td>${escHtml(e.notes||'—')}</td><td style="text-align:right">£${(h*rate).toFixed(2)}</td></tr>`;
   }).join('');
-
-  return `
-    <div class="inv-doc">
-      <div class="inv-top">
-        <div>
-          <div class="inv-brand">${escHtml(myName)}</div>
-          <div style="font-size:.8rem;color:#666;margin-top:.25rem">Freelance Invoice</div>
-        </div>
-        <div class="inv-meta">
-          <div><strong>Invoice No:</strong> ${escHtml(invNo)}</div>
-          <div><strong>Date:</strong> ${today}</div>
-          <div><strong>Period:</strong> ${monthLabel(month)}</div>
-        </div>
-      </div>
-      <div class="inv-parties">
-        <div>
-          <div class="inv-party-label">From</div>
-          <div class="inv-party-name">${escHtml(myName)}</div>
-        </div>
-        <div>
-          <div class="inv-party-label">Bill To</div>
-          <div class="inv-party-name">${escHtml(client)}</div>
-          ${cAddr ? `<div style="font-size:.8rem;color:#555;margin-top:.2rem">${cAddr}</div>` : ''}
-        </div>
-      </div>
-      <table class="inv-table">
-        <thead>
-          <tr>
-            <th>Date</th><th>Hours</th><th>Duration</th><th>Description</th>
-            <th style="text-align:right">Amount</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-      <div class="inv-totals">
-        <div class="inv-totals-box">
-          <div class="inv-total-row"><span>Total Hours</span><span>${formatHours(totalH)}</span></div>
-          <div class="inv-total-row"><span>Rate</span><span>£${rate.toFixed(2)}/hr</span></div>
-          <div class="inv-total-row grand"><span>Total Due</span><span>£${subtotal.toFixed(2)}</span></div>
-        </div>
-      </div>
-      ${payment ? `<div class="inv-footer"><strong>Payment Details:</strong> ${payment}</div>` : ''}
-    </div>`;
+  return `<div class="inv-doc">
+    <div class="inv-top">
+      <div><div class="inv-brand">${escHtml(myName)}</div><div style="font-size:.8rem;color:#666;margin-top:.25rem">Freelance Invoice</div></div>
+      <div class="inv-meta"><div><strong>Invoice No:</strong> ${escHtml(invNo)}</div><div><strong>Date:</strong> ${today}</div><div><strong>Period:</strong> ${monthLabel(month)}</div></div>
+    </div>
+    <div class="inv-parties">
+      <div><div class="inv-party-label">From</div><div class="inv-party-name">${escHtml(myName)}</div></div>
+      <div><div class="inv-party-label">Bill To</div><div class="inv-party-name">${escHtml(client)}</div>${cAddr?`<div style="font-size:.8rem;color:#555;margin-top:.2rem">${cAddr}</div>`:''}</div>
+    </div>
+    <table class="inv-table"><thead><tr><th>Date</th><th>Hours</th><th>Duration</th><th>Description</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="inv-totals"><div class="inv-totals-box">
+      <div class="inv-total-row"><span>Total Hours</span><span>${formatHours(totalH)}</span></div>
+      <div class="inv-total-row"><span>Rate</span><span>£${rate.toFixed(2)}/hr</span></div>
+      <div class="inv-total-row grand"><span>Total Due</span><span>£${subtotal.toFixed(2)}</span></div>
+    </div></div>
+    ${payment?`<div class="inv-footer"><strong>Payment Details:</strong> ${payment}</div>`:''}
+  </div>`;
 }
 
 document.getElementById('preview-invoice-btn').addEventListener('click', () => {
@@ -461,28 +388,9 @@ document.getElementById('print-invoice-btn').addEventListener('click', () => {
   if (!html) return showToast('No entries for selected month', 'error');
   const w = window.open('', '_blank');
   w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice</title>
-    <style>
-      body{margin:0;font-family:Georgia,serif;font-size:14px;color:#111}
-      .inv-doc{padding:2.5rem;max-width:800px;margin:auto}
-      .inv-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem}
-      .inv-brand{font-family:Arial Black,Arial,sans-serif;font-size:1.6rem;font-weight:900}
-      .inv-meta{text-align:right;font-size:.8rem;color:#555}.inv-meta strong{color:#111}
-      .inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem}
-      .inv-party-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#999;margin-bottom:.25rem}
-      .inv-party-name{font-weight:700;font-size:1rem}
-      .inv-table{width:100%;border-collapse:collapse;margin-bottom:2rem}
-      .inv-table th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#777;border-bottom:2px solid #111;padding:.5rem .75rem}
-      .inv-table td{padding:.6rem .75rem;border-bottom:1px solid #eee;font-size:.85rem;vertical-align:top}
-      .inv-totals{display:flex;justify-content:flex-end}
-      .inv-totals-box{min-width:220px}
-      .inv-total-row{display:flex;justify-content:space-between;padding:.35rem 0;font-size:.85rem}
-      .inv-total-row.grand{border-top:2px solid #111;margin-top:.5rem;padding-top:.75rem;font-weight:700;font-size:1.1rem}
-      .inv-footer{border-top:1px solid #eee;margin-top:2rem;padding-top:1rem;font-size:.75rem;color:#888}
-    </style>
+    <style>body{margin:0;font-family:Georgia,serif;font-size:14px;color:#111}.inv-doc{padding:2.5rem;max-width:800px;margin:auto}.inv-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem}.inv-brand{font-family:Arial Black,Arial,sans-serif;font-size:1.6rem;font-weight:900}.inv-meta{text-align:right;font-size:.8rem;color:#555}.inv-meta strong{color:#111}.inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem}.inv-party-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#999;margin-bottom:.25rem}.inv-party-name{font-weight:700;font-size:1rem}.inv-table{width:100%;border-collapse:collapse;margin-bottom:2rem}.inv-table th{text-align:left;font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:#777;border-bottom:2px solid #111;padding:.5rem .75rem}.inv-table td{padding:.6rem .75rem;border-bottom:1px solid #eee;font-size:.85rem;vertical-align:top}.inv-totals{display:flex;justify-content:flex-end}.inv-totals-box{min-width:220px}.inv-total-row{display:flex;justify-content:space-between;padding:.35rem 0;font-size:.85rem}.inv-total-row.grand{border-top:2px solid #111;margin-top:.5rem;padding-top:.75rem;font-weight:700;font-size:1.1rem}.inv-footer{border-top:1px solid #eee;margin-top:2rem;padding-top:1rem;font-size:.75rem;color:#888}</style>
   </head><body>${html}</body></html>`);
-  w.document.close();
-  w.focus();
-  setTimeout(() => w.print(), 400);
+  w.document.close(); w.focus(); setTimeout(() => w.print(), 400);
 });
 
 document.getElementById('email-invoice-btn').addEventListener('click', () => {
@@ -493,31 +401,15 @@ document.getElementById('email-invoice-btn').addEventListener('click', () => {
   const invNo  = document.getElementById('inv-invoice-no').value.trim() || 'INV-001';
   const entries = allEntries.filter(e => monthKey(e.date) === month);
   if (!entries.length) return showToast('No entries for selected month', 'error');
-
-  const totalH   = entries.reduce((s, e) => s + calcHours(e.date, e.in, e.out), 0);
-  const subtotal = (totalH * rate).toFixed(2);
-  const lines    = entries
-    .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in))
-    .map(e => {
-      const h = calcHours(e.date, e.in, e.out);
-      return `  ${formatDate(e.date)}  ${e.in}–${e.out}  (${formatHours(h)})  £${(h * rate).toFixed(2)}\n  ${e.notes || 'No notes'}`;
-    }).join('\n\n');
-
+  const totalH = entries.reduce((s, e) => s + calcHours(e.date, e.in, e.out), 0);
+  const lines  = entries.sort((a,b) => (a.date+a.in).localeCompare(b.date+b.in)).map(e => {
+    const h = calcHours(e.date, e.in, e.out);
+    return `  ${formatDate(e.date)}  ${e.in}–${e.out}  (${formatHours(h)})  £${(h*rate).toFixed(2)}\n  ${e.notes||'No notes'}`;
+  }).join('\n\n');
   const subject = encodeURIComponent(`Invoice ${invNo} – ${monthLabel(month)}`);
-  const body = encodeURIComponent(
-    `Dear ${client},\n\nPlease find below my invoice for ${monthLabel(month)}.\n\nInvoice No: ${invNo}\nFrom: ${myName}\n\n` +
-    `TIME LOG\n${'─'.repeat(40)}\n${lines}\n\n${'─'.repeat(40)}\nTotal Hours: ${formatHours(totalH)}\nRate: £${rate}/hr\nTotal Due: £${subtotal}\n\n` +
-    `Please arrange payment at your earliest convenience.\n\nKind regards,\n${myName}`
-  );
+  const body = encodeURIComponent(`Dear ${client},\n\nPlease find below my invoice for ${monthLabel(month)}.\n\nInvoice No: ${invNo}\nFrom: ${myName}\n\nTIME LOG\n${'─'.repeat(40)}\n${lines}\n\n${'─'.repeat(40)}\nTotal Hours: ${formatHours(totalH)}\nRate: £${rate}/hr\nTotal Due: £${(totalH*rate).toFixed(2)}\n\nPlease arrange payment at your earliest convenience.\n\nKind regards,\n${myName}`);
   window.location.href = `mailto:?subject=${subject}&body=${body}`;
 });
-
-/* ── Utility ────────────────────────────────────────────────────────────── */
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
 
 /* ── Service Worker ─────────────────────────────────────────────────────── */
 if ('serviceWorker' in navigator) {
