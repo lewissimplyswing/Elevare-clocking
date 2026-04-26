@@ -1,20 +1,80 @@
-/* ─── TimeClockPro · app.js ───────────────────────────────────────────────── */
-'use strict';
+/* ─── Elevare Clocking · app.js (Firebase Edition) ───────────────────────── */
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
+  query, where, orderBy, onSnapshot, getDocs }
+  from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-/* ── Storage ────────────────────────────────────────────────────────────── */
-const STORE_KEY = 'tcp_entries';
+/* ── Firebase Init ──────────────────────────────────────────────────────── */
+const firebaseConfig = {
+  apiKey: "AIzaSyChC5T5_N27IE4uAkv1MBn7_i35fc-oMzk",
+  authDomain: "elevare-clocking-in-system.firebaseapp.com",
+  projectId: "elevare-clocking-in-system",
+  storageBucket: "elevare-clocking-in-system.firebasestorage.app",
+  messagingSenderId: "901215275749",
+  appId: "1:901215275749:web:04c3032327e108346f220c"
+};
 
-function loadEntries() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; }
-  catch { return []; }
-}
+const firebaseApp = initializeApp(firebaseConfig);
+const auth        = getAuth(firebaseApp);
+const db          = getFirestore(firebaseApp);
 
-function saveEntries(entries) {
-  localStorage.setItem(STORE_KEY, JSON.stringify(entries));
-}
+/* ── State ──────────────────────────────────────────────────────────────── */
+let currentUser  = null;
+let allEntries   = [];
+let unsubscribe  = null;
 
-function generateId() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+/* ── Auth ───────────────────────────────────────────────────────────────── */
+document.getElementById('google-signin-btn').addEventListener('click', async () => {
+  try {
+    const provider = new GoogleAuthProvider();
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    showToast('Sign in failed. Please try again.', 'error');
+  }
+});
+
+document.getElementById('signout-btn').addEventListener('click', async () => {
+  if (unsubscribe) unsubscribe();
+  await signOut(auth);
+});
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+  if (user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').hidden = false;
+    startListening();
+    dateInput.value = todayStr();
+    renderMonthlySummary();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').hidden = true;
+    allEntries = [];
+    if (unsubscribe) unsubscribe();
+  }
+});
+
+/* ── Firestore Listener ─────────────────────────────────────────────────── */
+function startListening() {
+  if (unsubscribe) unsubscribe();
+  const q = query(
+    collection(db, 'entries'),
+    where('uid', '==', currentUser.uid),
+    orderBy('date', 'desc')
+  );
+  unsubscribe = onSnapshot(q, snapshot => {
+    allEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderMonthlySummary();
+    // Refresh whichever view is active
+    const activeView = document.querySelector('.nav-btn.active')?.dataset.view;
+    if (activeView === 'history') renderHistory();
+    if (activeView === 'invoice') populateInvoiceMonths();
+  }, err => {
+    console.error(err);
+    showToast('Error loading data', 'error');
+  });
 }
 
 /* ── Time Helpers ───────────────────────────────────────────────────────── */
@@ -23,7 +83,7 @@ function calcHours(dateStr, inTime, outTime) {
   const [oh, om] = outTime.split(':').map(Number);
   const inMins  = ih * 60 + im;
   let   outMins = oh * 60 + om;
-  if (outMins <= inMins) outMins += 1440; // overnight
+  if (outMins <= inMins) outMins += 1440;
   return (outMins - inMins) / 60;
 }
 
@@ -39,18 +99,12 @@ function formatDate(dateStr) {
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function monthKey(dateStr) {
-  return dateStr.slice(0, 7); // "2025-06"
-}
-
+function monthKey(dateStr) { return dateStr.slice(0, 7); }
 function monthLabel(key) {
   const [y, m] = key.split('-').map(Number);
   return new Date(y, m - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
 }
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
 
 /* ── Navigation ─────────────────────────────────────────────────────────── */
 document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -76,24 +130,19 @@ function showToast(msg, type = '') {
 }
 
 /* ── Log View ───────────────────────────────────────────────────────────── */
-const entryForm   = document.getElementById('entry-form');
-const dateInput   = document.getElementById('entry-date');
-const inInput     = document.getElementById('clock-in');
-const outInput    = document.getElementById('clock-out');
-const notesInput  = document.getElementById('notes');
-const dpPreview   = document.getElementById('duration-preview');
-const dpValue     = document.getElementById('dp-value');
-const dpRate      = document.getElementById('dp-rate');
+const dateInput  = document.getElementById('entry-date');
+const inInput    = document.getElementById('clock-in');
+const outInput   = document.getElementById('clock-out');
+const notesInput = document.getElementById('notes');
+const dpPreview  = document.getElementById('duration-preview');
+const dpValue    = document.getElementById('dp-value');
+const dpRate     = document.getElementById('dp-rate');
 
-// Default date to today
-dateInput.value = todayStr();
-
-// Live duration preview
 [inInput, outInput].forEach(el => el.addEventListener('input', updatePreview));
 
 function updatePreview() {
   if (inInput.value && outInput.value) {
-    const h = calcHours(dateInput.value, inInput.value, outInput.value);
+    const h = calcHours(dateInput.value || todayStr(), inInput.value, outInput.value);
     if (h > 0 && h < 24) {
       const rate = parseFloat(document.getElementById('inv-rate').value) || 15;
       dpValue.textContent = formatHours(h);
@@ -105,8 +154,9 @@ function updatePreview() {
   dpPreview.hidden = true;
 }
 
-entryForm.addEventListener('submit', e => {
+document.getElementById('entry-form').addEventListener('submit', async e => {
   e.preventDefault();
+  if (!currentUser) return;
   const date = dateInput.value;
   const tin  = inInput.value;
   const tout = outInput.value;
@@ -114,31 +164,44 @@ entryForm.addEventListener('submit', e => {
   const h = calcHours(date, tin, tout);
   if (h <= 0 || h >= 24) return showToast('Clock-out must be after clock-in', 'error');
 
-  const entries = loadEntries();
-  entries.push({ id: generateId(), date, in: tin, out: tout, notes: notesInput.value.trim() });
-  saveEntries(entries);
-  showToast('Entry saved ✓', 'success');
-  entryForm.reset();
-  dateInput.value = todayStr();
-  dpPreview.hidden = true;
-  renderMonthlySummary();
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled = true;
+
+  try {
+    await addDoc(collection(db, 'entries'), {
+      uid: currentUser.uid,
+      date,
+      in: tin,
+      out: tout,
+      notes: notesInput.value.trim(),
+      createdAt: Date.now()
+    });
+    showToast('Entry saved ✓', 'success');
+    document.getElementById('entry-form').reset();
+    dateInput.value = todayStr();
+    dpPreview.hidden = true;
+  } catch (err) {
+    showToast('Failed to save. Check connection.', 'error');
+  } finally {
+    saveBtn.textContent = 'Save Entry';
+    saveBtn.disabled = false;
+  }
 });
 
 document.getElementById('clear-btn').addEventListener('click', () => {
-  entryForm.reset();
+  document.getElementById('entry-form').reset();
   dateInput.value = todayStr();
   dpPreview.hidden = true;
 });
 
-/* Month summary on log view */
 function renderMonthlySummary() {
-  const entries = loadEntries();
   const thisMonth = todayStr().slice(0, 7);
   const rate = parseFloat(document.getElementById('inv-rate').value) || 15;
-  const monthEntries = entries.filter(e => monthKey(e.date) === thisMonth);
+  const monthEntries = allEntries.filter(e => monthKey(e.date) === thisMonth);
   const totalH = monthEntries.reduce((s, e) => s + calcHours(e.date, e.in, e.out), 0);
   const el = document.getElementById('month-summary');
-  if (monthEntries.length === 0) { el.innerHTML = ''; return; }
+  if (!monthEntries.length) { el.innerHTML = ''; return; }
   el.innerHTML = `
     <div class="summary-card">
       <div class="sc-label">This month</div>
@@ -153,30 +216,31 @@ function renderMonthlySummary() {
       <div class="sc-value">£${(totalH * rate).toFixed(2)}</div>
     </div>`;
 }
-renderMonthlySummary();
 
 /* ── History View ───────────────────────────────────────────────────────── */
-function getMonths(entries) {
-  const keys = [...new Set(entries.map(e => monthKey(e.date)))].sort().reverse();
+function getMonths() {
+  const keys = [...new Set(allEntries.map(e => monthKey(e.date)))].sort().reverse();
   return keys;
 }
 
 function populateFilterMonths() {
-  const entries = loadEntries();
-  const months = getMonths(entries);
+  const months = getMonths();
   const sel = document.getElementById('filter-month');
   const cur = sel.value;
-  sel.innerHTML = months.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('');
+  sel.innerHTML = months.length
+    ? months.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('')
+    : '<option value="">No entries yet</option>';
   if (cur && months.includes(cur)) sel.value = cur;
 }
 
 function renderHistory() {
   populateFilterMonths();
-  const sel    = document.getElementById('filter-month');
-  const month  = sel.value;
-  const entries = loadEntries().filter(e => monthKey(e.date) === month).sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in));
-  const rate   = parseFloat(document.getElementById('inv-rate').value) || 15;
-  const list   = document.getElementById('history-list');
+  const month = document.getElementById('filter-month').value;
+  const rate  = parseFloat(document.getElementById('inv-rate').value) || 15;
+  const entries = allEntries
+    .filter(e => monthKey(e.date) === month)
+    .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in));
+  const list = document.getElementById('history-list');
 
   if (!entries.length) {
     list.innerHTML = '<div class="empty-state"><span class="es-icon">📋</span>No entries for this month yet.</div>';
@@ -207,28 +271,31 @@ function renderHistory() {
 
 document.getElementById('filter-month').addEventListener('change', renderHistory);
 
-document.getElementById('delete-all-btn').addEventListener('click', () => {
+document.getElementById('delete-all-btn').addEventListener('click', async () => {
   const month = document.getElementById('filter-month').value;
-  if (!month) return;
+  if (!month || !currentUser) return;
   if (!confirm(`Delete ALL entries for ${monthLabel(month)}?`)) return;
-  const entries = loadEntries().filter(e => monthKey(e.date) !== month);
-  saveEntries(entries);
-  renderHistory();
-  renderMonthlySummary();
-  showToast('Month cleared', 'success');
+
+  const toDelete = allEntries.filter(e => monthKey(e.date) === month);
+  try {
+    await Promise.all(toDelete.map(e => deleteDoc(doc(db, 'entries', e.id))));
+    showToast('Month cleared', 'success');
+  } catch {
+    showToast('Error deleting entries', 'error');
+  }
 });
 
 /* ── Edit Modal ─────────────────────────────────────────────────────────── */
 let editingId = null;
 
 function openEditModal(id) {
-  const entry = loadEntries().find(e => e.id === id);
+  const entry = allEntries.find(e => e.id === id);
   if (!entry) return;
   editingId = id;
   document.getElementById('edit-date').value  = entry.date;
   document.getElementById('edit-in').value    = entry.in;
   document.getElementById('edit-out').value   = entry.out;
-  document.getElementById('edit-notes').value = entry.notes;
+  document.getElementById('edit-notes').value = entry.notes || '';
   document.getElementById('edit-modal').hidden = false;
 }
 
@@ -242,47 +309,43 @@ document.getElementById('edit-modal').addEventListener('click', e => {
   if (e.target === e.currentTarget) closeEditModal();
 });
 
-document.getElementById('edit-form').addEventListener('submit', e => {
+document.getElementById('edit-form').addEventListener('submit', async e => {
   e.preventDefault();
-  const date = document.getElementById('edit-date').value;
-  const tin  = document.getElementById('edit-in').value;
-  const tout = document.getElementById('edit-out').value;
+  const date  = document.getElementById('edit-date').value;
+  const tin   = document.getElementById('edit-in').value;
+  const tout  = document.getElementById('edit-out').value;
   const notes = document.getElementById('edit-notes').value.trim();
   if (!date || !tin || !tout) return showToast('Fill all required fields', 'error');
   const h = calcHours(date, tin, tout);
   if (h <= 0 || h >= 24) return showToast('Clock-out must be after clock-in', 'error');
 
-  let entries = loadEntries();
-  const idx   = entries.findIndex(e => e.id === editingId);
-  if (idx === -1) return;
-  entries[idx] = { ...entries[idx], date, in: tin, out: tout, notes };
-  saveEntries(entries);
-  closeEditModal();
-  renderHistory();
-  renderMonthlySummary();
-  showToast('Entry updated ✓', 'success');
+  try {
+    await updateDoc(doc(db, 'entries', editingId), { date, in: tin, out: tout, notes });
+    closeEditModal();
+    showToast('Entry updated ✓', 'success');
+  } catch {
+    showToast('Failed to update', 'error');
+  }
 });
 
-document.getElementById('delete-entry-btn').addEventListener('click', () => {
+document.getElementById('delete-entry-btn').addEventListener('click', async () => {
   if (!confirm('Delete this entry?')) return;
-  const entries = loadEntries().filter(e => e.id !== editingId);
-  saveEntries(entries);
-  closeEditModal();
-  renderHistory();
-  renderMonthlySummary();
-  showToast('Entry deleted', 'success');
+  try {
+    await deleteDoc(doc(db, 'entries', editingId));
+    closeEditModal();
+    showToast('Entry deleted', 'success');
+  } catch {
+    showToast('Failed to delete', 'error');
+  }
 });
 
 /* ── Invoice View ───────────────────────────────────────────────────────── */
 function populateInvoiceMonths() {
-  const entries = loadEntries();
-  const months  = getMonths(entries);
+  const months = getMonths();
   const sel = document.getElementById('inv-month');
   sel.innerHTML = months.length
     ? months.map(k => `<option value="${k}">${monthLabel(k)}</option>`).join('')
     : '<option value="">No entries yet</option>';
-
-  // Set a sensible invoice number default
   const invNo = document.getElementById('inv-invoice-no');
   if (!invNo.value) {
     const d = new Date();
@@ -300,7 +363,7 @@ function buildInvoiceHTML() {
   const payment = document.getElementById('inv-payment').value.trim().replace(/\n/g, '<br>');
   const today   = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-  const entries = loadEntries()
+  const entries = allEntries
     .filter(e => monthKey(e.date) === month)
     .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in));
 
@@ -311,14 +374,13 @@ function buildInvoiceHTML() {
 
   const rows = entries.map(e => {
     const h = calcHours(e.date, e.in, e.out);
-    return `
-      <tr>
-        <td>${formatDate(e.date)}</td>
-        <td>${e.in} – ${e.out}</td>
-        <td>${formatHours(h)}</td>
-        <td>${escHtml(e.notes || '—')}</td>
-        <td style="text-align:right">£${(h * rate).toFixed(2)}</td>
-      </tr>`;
+    return `<tr>
+      <td>${formatDate(e.date)}</td>
+      <td>${e.in} – ${e.out}</td>
+      <td>${formatHours(h)}</td>
+      <td>${escHtml(e.notes || '—')}</td>
+      <td style="text-align:right">£${(h * rate).toFixed(2)}</td>
+    </tr>`;
   }).join('');
 
   return `
@@ -334,7 +396,6 @@ function buildInvoiceHTML() {
           <div><strong>Period:</strong> ${monthLabel(month)}</div>
         </div>
       </div>
-
       <div class="inv-parties">
         <div>
           <div class="inv-party-label">From</div>
@@ -346,37 +407,22 @@ function buildInvoiceHTML() {
           ${cAddr ? `<div style="font-size:.8rem;color:#555;margin-top:.2rem">${cAddr}</div>` : ''}
         </div>
       </div>
-
       <table class="inv-table">
         <thead>
           <tr>
-            <th>Date</th>
-            <th>Hours</th>
-            <th>Duration</th>
-            <th>Description</th>
+            <th>Date</th><th>Hours</th><th>Duration</th><th>Description</th>
             <th style="text-align:right">Amount</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
-
       <div class="inv-totals">
         <div class="inv-totals-box">
-          <div class="inv-total-row">
-            <span>Total Hours</span>
-            <span>${formatHours(totalH)}</span>
-          </div>
-          <div class="inv-total-row">
-            <span>Rate</span>
-            <span>£${rate.toFixed(2)}/hr</span>
-          </div>
-          <div class="inv-total-row grand">
-            <span>Total Due</span>
-            <span>£${subtotal.toFixed(2)}</span>
-          </div>
+          <div class="inv-total-row"><span>Total Hours</span><span>${formatHours(totalH)}</span></div>
+          <div class="inv-total-row"><span>Rate</span><span>£${rate.toFixed(2)}/hr</span></div>
+          <div class="inv-total-row grand"><span>Total Due</span><span>£${subtotal.toFixed(2)}</span></div>
         </div>
       </div>
-
       ${payment ? `<div class="inv-footer"><strong>Payment Details:</strong> ${payment}</div>` : ''}
     </div>`;
 }
@@ -394,17 +440,14 @@ document.getElementById('preview-invoice-btn').addEventListener('click', () => {
 document.getElementById('print-invoice-btn').addEventListener('click', () => {
   const html = buildInvoiceHTML();
   if (!html) return showToast('No entries for selected month', 'error');
-  // Open in new window for clean print/PDF
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-    <title>Invoice</title>
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Invoice</title>
     <style>
       body{margin:0;font-family:Georgia,serif;font-size:14px;color:#111}
       .inv-doc{padding:2.5rem;max-width:800px;margin:auto}
       .inv-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2rem}
       .inv-brand{font-family:Arial Black,Arial,sans-serif;font-size:1.6rem;font-weight:900}
-      .inv-meta{text-align:right;font-size:.8rem;color:#555}
-      .inv-meta strong{color:#111}
+      .inv-meta{text-align:right;font-size:.8rem;color:#555}.inv-meta strong{color:#111}
       .inv-parties{display:grid;grid-template-columns:1fr 1fr;gap:2rem;margin-bottom:2rem}
       .inv-party-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.1em;color:#999;margin-bottom:.25rem}
       .inv-party-name{font-weight:700;font-size:1rem}
@@ -416,12 +459,11 @@ document.getElementById('print-invoice-btn').addEventListener('click', () => {
       .inv-total-row{display:flex;justify-content:space-between;padding:.35rem 0;font-size:.85rem}
       .inv-total-row.grand{border-top:2px solid #111;margin-top:.5rem;padding-top:.75rem;font-weight:700;font-size:1.1rem}
       .inv-footer{border-top:1px solid #eee;margin-top:2rem;padding-top:1rem;font-size:.75rem;color:#888}
-      @media print{body{print-color-adjust:exact}}
     </style>
   </head><body>${html}</body></html>`);
   w.document.close();
   w.focus();
-  setTimeout(() => { w.print(); }, 400);
+  setTimeout(() => w.print(), 400);
 });
 
 document.getElementById('email-invoice-btn').addEventListener('click', () => {
@@ -430,13 +472,12 @@ document.getElementById('email-invoice-btn').addEventListener('click', () => {
   const client = document.getElementById('inv-client').value.trim() || 'Client';
   const myName = document.getElementById('inv-your-name').value.trim() || 'Your Name';
   const invNo  = document.getElementById('inv-invoice-no').value.trim() || 'INV-001';
-  const entries = loadEntries().filter(e => monthKey(e.date) === month);
+  const entries = allEntries.filter(e => monthKey(e.date) === month);
   if (!entries.length) return showToast('No entries for selected month', 'error');
 
   const totalH   = entries.reduce((s, e) => s + calcHours(e.date, e.in, e.out), 0);
   const subtotal = (totalH * rate).toFixed(2);
-
-  const lines = entries
+  const lines    = entries
     .sort((a, b) => (a.date + a.in).localeCompare(b.date + b.in))
     .map(e => {
       const h = calcHours(e.date, e.in, e.out);
@@ -455,15 +496,11 @@ document.getElementById('email-invoice-btn').addEventListener('click', () => {
 /* ── Utility ────────────────────────────────────────────────────────────── */
 function escHtml(str) {
   return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-/* ── Service Worker Registration ──────────────────────────────────────────── */
+/* ── Service Worker ─────────────────────────────────────────────────────── */
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  });
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
