@@ -1,9 +1,9 @@
 /* ─── Elevare Clocking · app.js (Firebase Edition) ───────────────────────── */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
+import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
-  query, where, orderBy, onSnapshot, getDocs }
+  query, where, onSnapshot, getDocs }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ── Firebase Init ──────────────────────────────────────────────────────── */
@@ -26,15 +26,31 @@ let allEntries   = [];
 let unsubscribe  = null;
 
 /* Handle redirect result on page load */
-getRedirectResult(auth).catch(() => {});
+getRedirectResult(auth).then(result => {
+  // handled by onAuthStateChanged
+}).catch(() => {});
 
 /* ── Auth ───────────────────────────────────────────────────────────────── */
 document.getElementById('google-signin-btn').addEventListener('click', async () => {
+  const provider = new GoogleAuthProvider();
   try {
-    const provider = new GoogleAuthProvider();
-    await signInWithRedirect(auth, provider);
+    // Try popup first (works on desktop and most mobile browsers)
+    await signInWithPopup(auth, provider);
   } catch (e) {
-    showToast('Sign in failed. Please try again.', 'error');
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') {
+      // Fall back to redirect if popup is blocked
+      try {
+        try {
+      await signInWithPopup(auth, provider);
+    } catch(popupErr) {
+      await signInWithRedirect(auth, provider);
+    }
+      } catch (e2) {
+        showToast('Sign in failed. Please try again.', 'error');
+      }
+    } else {
+      showToast('Sign in failed. Please try again.', 'error');
+    }
   }
 });
 
@@ -65,7 +81,7 @@ function startListening() {
   const q = query(
     collection(db, 'entries'),
     where('uid', '==', currentUser.uid),
-    orderBy('date', 'desc')
+    
   );
   unsubscribe = onSnapshot(q, snapshot => {
     allEntries = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
