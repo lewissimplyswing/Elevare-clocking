@@ -1,6 +1,6 @@
 /* ─── Elevare Clocking · app.js (Firebase Edition) ───────────────────────── */
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged }
   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc,
   query, where, orderBy, onSnapshot, getDocs }
@@ -25,11 +25,14 @@ let currentUser  = null;
 let allEntries   = [];
 let unsubscribe  = null;
 
+/* Handle redirect result on page load */
+getRedirectResult(auth).catch(() => {});
+
 /* ── Auth ───────────────────────────────────────────────────────────────── */
 document.getElementById('google-signin-btn').addEventListener('click', async () => {
   try {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    await signInWithRedirect(auth, provider);
   } catch (e) {
     showToast('Sign in failed. Please try again.', 'error');
   }
