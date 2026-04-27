@@ -456,3 +456,54 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   color: var(--danger); font-size: .78rem; margin-top: .5rem;
   min-height: 1rem; text-align: center;
 }
+
+/* ─── Period Summary ────────────────────────────────────────────────────── */
+.period-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+}
+.period-summary-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: .4rem 0; border-bottom: 1px solid var(--border);
+}
+.period-summary-row:last-child { border-bottom: none; }
+.period-label { font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.period-value { font-family: var(--font-head); font-weight: 700; font-size: 1.1rem; }
+.period-value.accent { color: var(--accent); }
+
+/* ─── Raise Invoice Button ──────────────────────────────────────────────── */
+.btn-raise {
+  background: #ff6b35;
+  color: #fff;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  font-weight: 500;
+  padding: .7rem 1.5rem;
+  border-radius: 7px;
+  cursor: pointer;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: transform .15s, box-shadow .15s;
+}
+.btn-raise:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,107,53,.3); }
+.btn-raise:disabled { opacity: .6; cursor: not-allowed; transform: none; }
+
+/* ─── Past Invoice Items ────────────────────────────────────────────────── */
+.invoice-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.1rem 1.3rem;
+  display: grid; grid-template-columns: 1fr auto; gap: .5rem;
+  cursor: pointer; transition: border-color .2s, transform .15s;
+  margin-bottom: .75rem;
+}
+.invoice-item:hover { border-color: #ff6b35; transform: translateX(3px); }
+.inv-item-title { font-family: var(--font-head); font-weight: 700; font-size: 1rem; color: var(--text); }
+.inv-item-meta { font-size: .75rem; color: var(--muted); margin-top: .2rem; }
+.inv-item-amount { font-family: var(--font-head); font-weight: 800; font-size: 1.4rem; color: #ff6b35; text-align: right; letter-spacing: -.02em; }
+.inv-item-hours { font-size: .75rem; color: var(--muted); text-align: right; }
