@@ -21,12 +21,10 @@
     <div class="login-box">
       <div class="login-logo">⏱</div>
       <h1 class="login-title">Elevare<br>Clocking</h1>
-
       <div class="login-tabs">
         <button class="login-tab active" data-tab="signin">Sign In</button>
         <button class="login-tab" data-tab="register">Register</button>
       </div>
-
       <div id="tab-signin">
         <div class="field">
           <label for="signin-email">Email</label>
@@ -39,7 +37,6 @@
         <button class="btn-primary btn-full" id="signin-btn">Sign In</button>
         <p class="login-error" id="signin-error"></p>
       </div>
-
       <div id="tab-register" hidden>
         <div class="field">
           <label for="reg-email">Email</label>
@@ -52,7 +49,6 @@
         <button class="btn-primary btn-full" id="register-btn">Create Account</button>
         <p class="login-error" id="reg-error"></p>
       </div>
-
       <p class="login-note">Your data is private and stored securely in the cloud</p>
     </div>
   </div>
@@ -73,6 +69,7 @@
     </header>
 
     <main>
+      <!-- LOG VIEW -->
       <section id="view-log" class="view active">
         <div class="section-header">
           <h1>New Entry</h1>
@@ -110,31 +107,47 @@
         <div class="month-summary" id="month-summary"></div>
       </section>
 
+      <!-- HISTORY VIEW -->
       <section id="view-history" class="view">
         <div class="section-header">
-          <h1>History</h1>
-          <div class="filter-row">
-            <select id="filter-month"></select>
-            <button class="btn-ghost btn-sm" id="delete-all-btn">Clear month</button>
-          </div>
+          <h1>Current Period</h1>
+          <p class="subtitle">All unbilled entries</p>
         </div>
         <div id="history-list" class="history-list"></div>
       </section>
 
+      <!-- INVOICE VIEW -->
       <section id="view-invoice" class="view">
         <div class="section-header">
           <h1>Invoice</h1>
-          <p class="subtitle">Generate &amp; send monthly invoice</p>
+          <p class="subtitle">Raise &amp; lock a billing period</p>
         </div>
+
+        <!-- Current period summary -->
+        <div class="period-summary">
+          <div class="period-summary-row">
+            <span class="period-label">Unbilled entries</span>
+            <span id="current-period-count" class="period-value">0 entries</span>
+          </div>
+          <div class="period-summary-row">
+            <span class="period-label">Total hours</span>
+            <span id="current-period-hours" class="period-value accent">0h</span>
+          </div>
+          <div class="period-summary-row">
+            <span class="period-label">Total amount</span>
+            <span id="current-period-amount" class="period-value">£0.00</span>
+          </div>
+        </div>
+
         <div class="invoice-config">
           <div class="form-row two-col">
             <div class="field">
-              <label for="inv-month">Month</label>
-              <select id="inv-month"></select>
+              <label for="inv-title">Invoice Title</label>
+              <input type="text" id="inv-title" placeholder="e.g. April 2026" />
             </div>
             <div class="field">
-              <label for="inv-rate">Rate (£/hr)</label>
-              <input type="number" id="inv-rate" value="15" min="1" step="0.5" />
+              <label for="inv-invoice-no">Invoice No.</label>
+              <input type="text" id="inv-invoice-no" placeholder="INV-001" />
             </div>
           </div>
           <div class="form-row two-col">
@@ -143,8 +156,8 @@
               <input type="text" id="inv-your-name" placeholder="Jane Smith" />
             </div>
             <div class="field">
-              <label for="inv-invoice-no">Invoice No.</label>
-              <input type="text" id="inv-invoice-no" placeholder="INV-001" />
+              <label for="inv-rate">Rate (£/hr)</label>
+              <input type="number" id="inv-rate" value="15" min="1" step="0.5" />
             </div>
           </div>
           <div class="field">
@@ -159,12 +172,23 @@
             <label for="inv-payment">Payment Details</label>
             <textarea id="inv-payment" rows="2" placeholder="Sort code: 00-00-00  Account: 12345678"></textarea>
           </div>
+
           <div class="invoice-actions">
-            <button class="btn-primary" id="preview-invoice-btn">Preview Invoice</button>
-            <button class="btn-secondary" id="print-invoice-btn">Print / Save PDF</button>
-            <button class="btn-ghost" id="email-invoice-btn">Open in Email</button>
+            <button class="btn-primary" id="preview-invoice-btn">Preview</button>
+            <button class="btn-raise" id="raise-invoice-btn">Raise &amp; Lock Invoice</button>
+          </div>
+          <div class="invoice-actions" style="margin-top:.75rem">
+            <button class="btn-secondary" id="print-invoice-btn">Print / PDF</button>
+            <button class="btn-ghost" id="email-invoice-btn">Email</button>
           </div>
         </div>
+
+        <!-- Past invoices -->
+        <div class="section-header" style="margin-top:2rem">
+          <h2 style="font-family:var(--font-head);font-size:1.3rem;font-weight:700">Past Invoices</h2>
+        </div>
+        <div id="past-invoices-list" class="history-list"></div>
+
         <div id="invoice-preview" class="invoice-preview" hidden></div>
       </section>
     </main>
